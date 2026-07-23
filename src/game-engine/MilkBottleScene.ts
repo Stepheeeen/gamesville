@@ -241,21 +241,24 @@ export default class MilkBottleScene extends Phaser.Scene {
     body.setOffset(-17, -46);
     body.setBounce(0.15);
     body.setDragX(60);
-    // Frozen until the first throw — spawn settling must never topple the
-    // pyramid on its own (bottles used to self-collapse for free points).
+    body.setAngularDrag(220); // tumble spins down instead of wobbling forever
+    // Frozen until actually struck — a frozen bottle is a solid target, so a
+    // missed throw leaves the pyramid pristine (waking everything on throw
+    // used to shuffle untouched bottles into an unscored heap).
     body.setAllowGravity(false);
     body.setImmovable(true);
     c.setData('down', false);
+    c.setData('awake', false);
     return c;
   }
 
-  /** Let the pyramid react to physics once a ball is actually in the air. */
-  private wakeBottles() {
-    for (const bottle of this.bottles) {
-      const body = bottle.body as Phaser.Physics.Arcade.Body;
-      body.setAllowGravity(true);
-      body.setImmovable(false);
-    }
+  /** A struck bottle becomes dynamic; contact chains the wake to neighbors. */
+  private wakeBottle(bottle: Phaser.GameObjects.Container) {
+    if (bottle.getData('awake')) return;
+    bottle.setData('awake', true);
+    const body = bottle.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(true);
+    body.setImmovable(false);
   }
 
   private buildPyramid(first = false) {
@@ -287,7 +290,16 @@ export default class MilkBottleScene extends Phaser.Scene {
     });
 
     this.physics.add.collider(this.bottles, this.stand);
-    this.physics.add.collider(this.bottles, this.bottles);
+    // Wake chains through the stack: an awake bottle crashing into a frozen
+    // one frees it, so a solid hit still topples the pyramid naturally.
+    this.physics.add.collider(this.bottles, this.bottles, (a, b) => {
+      const ba = a as Phaser.GameObjects.Container;
+      const bb = b as Phaser.GameObjects.Container;
+      if (ba.getData('awake') || bb.getData('awake')) {
+        this.wakeBottle(ba);
+        this.wakeBottle(bb);
+      }
+    });
   }
 
   // ── Ball ────────────────────────────────────────────────────────────────────
@@ -307,6 +319,7 @@ export default class MilkBottleScene extends Phaser.Scene {
 
     this.physics.add.collider(this.ball, this.bottles, (_ball, bottleObj) => {
       const bottle = bottleObj as Phaser.GameObjects.Container;
+      this.wakeBottle(bottle);
       const body = bottle.body as Phaser.Physics.Arcade.Body;
       // Carry real impact through: share the ball's momentum + tumble
       body.velocity.x += this.ballBody.velocity.x * 0.6;
@@ -354,7 +367,6 @@ export default class MilkBottleScene extends Phaser.Scene {
     this.ballsLeft -= 1;
     this.ballsUsedThisPyramid += 1;
     this.updateBallPips();
-    this.wakeBottles();
     this.ballBody.setAllowGravity(true);
     this.ballBody.setVelocity(vx, vy);
     this.ballBody.setAngularVelocity(vx > 0 ? 620 : -620); // visible spin
