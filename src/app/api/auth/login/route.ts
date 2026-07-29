@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { getUserByPhone } from '@/lib/db';
 import { signToken } from '@/lib/jwt';
 import { rateLimit } from '@/lib/rate-limit';
+import { ensureDemoAccount } from '@/lib/demo';
 
 function formatMsisdn(msisdn: string): string {
   const m = msisdn.match(/^(\+\d{3})(\d{3})(\d{3})(\d{4})$/);
@@ -31,6 +32,10 @@ export async function POST(req: NextRequest) {
     if (!rateLimit(`login:${phone}`, 10, 15 * 60_000)) {
       return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429 });
     }
+
+    // Onboarding exception: seed the allow-listed demo account so it can
+    // sign in with its password without an SMS subscription. No-op otherwise.
+    await ensureDemoAccount(phone);
 
     const user = await getUserByPhone(phone);
     if (!user) {
