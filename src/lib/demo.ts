@@ -3,28 +3,42 @@
 // through the MNO subscription/OTP flow — for demos, reviews and store
 // onboarding. It is seeded on demand (idempotent) rather than hardcoded as
 // a login bypass, so it flows through the normal password check like any
-// real user. Only this one number is privileged; nothing else changes.
+// real user. Only this one number is privileged.
+//
+// The number and password come from env vars (DEMO_ACCOUNT_PHONE /
+// DEMO_ACCOUNT_PASSWORD) so no credential lives in the repo. If either is
+// unset the whole feature is a no-op.
 
 import bcrypt from 'bcryptjs';
 import { getUserByPhone, createUser, updateUser, setPass } from './db';
 
-/** Normalised MSISDN of the allow-listed demo number "07035007672". */
-export const DEMO_PHONE = '+2347035007672';
-const DEMO_PASSWORD = 'Test@123';
+function normaliseMsisdn(raw: string, countryCode = '234'): string {
+  let digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  if (!digits.startsWith(countryCode)) digits = countryCode + digits;
+  return '+' + digits;
+}
+
+const RAW_PHONE = process.env.DEMO_ACCOUNT_PHONE ?? '';
+const DEMO_PASSWORD = process.env.DEMO_ACCOUNT_PASSWORD ?? '';
+
+/** Normalised MSISDN of the allow-listed demo number, or '' if unconfigured. */
+export const DEMO_PHONE = RAW_PHONE ? normaliseMsisdn(RAW_PHONE) : '';
 
 export function isDemoPhone(phone: string): boolean {
-  return phone === DEMO_PHONE;
+  return !!DEMO_PHONE && phone === DEMO_PHONE;
 }
 
 // Dedupe concurrent seeds within a process.
 const g = globalThis as unknown as { __gvDemoSeed?: Promise<void> };
 
 /**
- * Ensure the demo account exists with the fixed password and an active
- * pass. No-op for any other phone. Safe to call on every login attempt.
+ * Ensure the demo account exists with its password and an active pass.
+ * No-op for any other phone, or when the feature is unconfigured. Safe to
+ * call on every login attempt.
  */
 export async function ensureDemoAccount(phone: string): Promise<void> {
-  if (!isDemoPhone(phone)) return;
+  if (!DEMO_PASSWORD || !isDemoPhone(phone)) return;
   if (!g.__gvDemoSeed) {
     g.__gvDemoSeed = seed().catch((err) => {
       console.error('[demo] seed failed', err);
