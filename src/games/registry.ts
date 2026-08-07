@@ -14,7 +14,7 @@ const IMPORTERS = {
   whack: () => import('./phaser/WhackAMole'),
   ducks: () => import('./phaser/DuckGallery'),
   ferris: () => import('./phaser/FerrisDrop'),
-  bottles: () => import('./phaser/MilkBottle'),
+  bowling: () => import('./phaser/Bowling'),
 } satisfies Record<string, () => Promise<{ default: ComponentType<GameProps> }>>;
 
 export type RegisteredGameId = keyof typeof IMPORTERS;

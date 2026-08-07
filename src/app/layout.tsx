@@ -50,7 +50,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${alfaSlab.variable} ${nunito.variable}`}>
+    <html
+      lang="en"
+      className={`${alfaSlab.variable} ${nunito.variable}`}
+      data-scroll-behavior="smooth"
+    >
       <body className="antialiased">{children}</body>
     </html>
   );
