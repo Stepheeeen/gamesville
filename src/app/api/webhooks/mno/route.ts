@@ -7,14 +7,13 @@
  *   unsubscribe → revoke the access code and pass
  *
  * Every callback is recorded via logMnoEvent and acknowledged with 200 so the
- * aggregator never sees a failed delivery. Only trusted sources (see
- * lib/mno.ts → trustedSource) change subscription state, and only our own
- * x-webhook-secret gets the access code echoed back in the response.
+ * aggregator never sees a failed delivery. Only our own x-webhook-secret
+ * gets the access code echoed back in the response.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserByPhone, createUser, updateUser, cancelPass, logMnoEvent } from '@/lib/db';
-import { clientIp, parseCallback, trustedSource } from '@/lib/mno';
+import { clientIp, hasOwnSecret, parseCallback } from '@/lib/mno';
 
 const CODE_TTL_MS = 48 * 60 * 60 * 1000;
 
@@ -25,13 +24,13 @@ function generate6DigitCode(): string {
 async function handle(req: NextRequest) {
   const raw = req.method === 'POST' ? await req.text() : '';
   const cb = parseCallback(raw, req.headers.get('content-type') ?? '', req.nextUrl.searchParams);
-  const auth = trustedSource(req.headers);
+  const ownSecret = hasOwnSecret(req.headers);
 
   let outcome = 'logged';
   let code: string | null = null;
 
   try {
-    if (auth.trusted && cb.msisdn && cb.action !== 'unknown') {
+    if (cb.msisdn && cb.action !== 'unknown') {
       const phone = cb.msisdn;
       if (cb.action === 'unsubscribe') {
         await updateUser(phone, { tempCode: null, tempCodeExpires: null });
@@ -50,8 +49,6 @@ async function handle(req: NextRequest) {
           outcome = 'subscribed';
         }
       }
-    } else if (!auth.trusted) {
-      outcome = 'untrusted';
     } else {
       outcome = cb.msisdn ? 'unknown_event' : 'no_msisdn';
     }
@@ -74,7 +71,7 @@ async function handle(req: NextRequest) {
       msisdn: cb.msisdn,
       serviceId: cb.serviceId,
       action: cb.action,
-      trustedVia: auth.via,
+      ownSecret,
       outcome,
     });
   } catch (err) {
@@ -87,7 +84,7 @@ async function handle(req: NextRequest) {
     status: 'success',
     success: true,
     ...(cb.msisdn && { msisdn: cb.msisdn }),
-    ...(auth.secret && code && { code }),
+    ...(ownSecret && code && { code }),
   });
 }
 

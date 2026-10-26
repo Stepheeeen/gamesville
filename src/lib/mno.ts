@@ -114,25 +114,11 @@ export function clientIp(headers: Headers): string {
 }
 
 /**
- * Who may change subscription state:
- *   • our own `x-webhook-secret` (WEBHOOK_SECRET)
- *   • the aggregator's token (MNO_X_TOKEN) in `x-token` / `authorization`
- *   • a source IP in MNO_ALLOWED_IPS (comma-separated)
- * Anything else is logged and acknowledged but not acted on.
+ * True when the caller sent our own `x-webhook-secret` (WEBHOOK_SECRET).
+ * Callbacks are processed either way; only our own callers get the access
+ * code echoed back, so an outsider can never read a subscriber's code.
  */
-export function trustedSource(headers: Headers): { trusted: boolean; via: string | null; secret: boolean } {
+export function hasOwnSecret(headers: Headers): boolean {
   const secret = process.env.WEBHOOK_SECRET;
-  if (secret && headers.get('x-webhook-secret') === secret) return { trusted: true, via: 'secret', secret: true };
-
-  const token = process.env.MNO_X_TOKEN;
-  if (token) {
-    const auth = headers.get('authorization')?.replace(/^(bearer|token)\s+/i, '');
-    if (headers.get('x-token') === token || auth === token) return { trusted: true, via: 'token', secret: false };
-  }
-
-  const allowed = (process.env.MNO_ALLOWED_IPS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  const ip = clientIp(headers);
-  if (ip && allowed.includes(ip)) return { trusted: true, via: 'ip', secret: false };
-
-  return { trusted: false, via: null, secret: false };
+  return !!secret && headers.get('x-webhook-secret') === secret;
 }
