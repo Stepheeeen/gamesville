@@ -125,6 +125,7 @@ async function mongo(): Promise<MongoHandles | null> {
 interface FileShape {
   users: Record<string, Record<string, unknown>>; // keyed by phone
   scores: ScoreDoc[];
+  mnoEvents?: Record<string, unknown>[];
 }
 
 class FileStore {
@@ -234,6 +235,20 @@ export async function totalPlayers(): Promise<number> {
   const m = await mongo();
   if (m) return m.users.countDocuments();
   return Object.keys(file().data.users).length;
+}
+
+// ── MNO callbacks ─────────────────────────────────────────────────────────────
+
+/** Append a raw aggregator callback to the audit log (`mno_events`). */
+export async function logMnoEvent(entry: Record<string, unknown>): Promise<void> {
+  const m = await mongo();
+  if (m) {
+    await m.db.collection('mno_events').insertOne({ ...entry });
+    return;
+  }
+  const store = file();
+  (store.data.mnoEvents ??= []).push(entry);
+  store.flush();
 }
 
 // ── Passes ("Ride Tickets & Wristbands") ──────────────────────────────────────
