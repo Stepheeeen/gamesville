@@ -25,6 +25,13 @@ export interface UserStats {
   lastPlayDay: string | null;
 }
 
+export interface Subscription {
+  serviceId: string;
+  status: 'active' | 'cancelled';
+  expiresAt: string | null;
+  updatedAt: string;
+}
+
 export interface UserDoc {
   id: string;
   phone: string;
@@ -35,6 +42,8 @@ export interface UserDoc {
   tempCodeExpires: string | null;
   isFirstLogin: boolean;
   pass: { type: PassType; expiresAt: string } | null;
+  /** Carrier subscription as last reported by the aggregator's billing sync. */
+  subscription: Subscription | null;
   stats: UserStats;
   createdAt: string;
 }
@@ -79,6 +88,7 @@ function hydrateUser(raw: Record<string, unknown>, id: string): UserDoc {
     tempCodeExpires: raw.tempCodeExpires ? new Date(raw.tempCodeExpires as string).toISOString() : null,
     isFirstLogin: Boolean(raw.isFirstLogin ?? true),
     pass: (raw.pass as UserDoc['pass']) ?? null,
+    subscription: (raw.subscription as Subscription) ?? null,
     stats: { ...EMPTY_STATS, ...((raw.stats as UserStats) ?? {}) },
     createdAt: raw.createdAt ? new Date(raw.createdAt as string).toISOString() : new Date().toISOString(),
   };
@@ -203,6 +213,7 @@ export async function createUser(phone: string, tempCode: string, expiresMs: num
     securityQuestion: null,
     securityAnswerHash: null,
     pass: null,
+    subscription: null,
     stats: { ...EMPTY_STATS },
     createdAt: now.toISOString(),
   };
