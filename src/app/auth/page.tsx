@@ -187,7 +187,7 @@ function TicketBooth() {
           {step === 'subscribe' && (
             <Form
               title="Join the fair"
-              hint="Text GAME to 32770, or enter your number for a mock code (dev: 123456)."
+              hint="Text GVD to 20260 from your MTN line (₦100/day) — your access code arrives by SMS."
               busy={busy}
               submitLabel="Send my code"
               onSubmit={handleSubscribe}

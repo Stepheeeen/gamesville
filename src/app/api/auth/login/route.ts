@@ -4,6 +4,9 @@ import { getUserByPhone } from '@/lib/db';
 import { signToken } from '@/lib/jwt';
 import { rateLimit } from '@/lib/rate-limit';
 import { ensureDemoAccount } from '@/lib/demo';
+import { subscriptionLapsed } from '@/lib/mno';
+
+const LAPSED_MESSAGE = 'Your Games Ville subscription has ended. Text GVD to 20260 to resubscribe.';
 
 function formatMsisdn(msisdn: string): string {
   const m = msisdn.match(/^(\+\d{3})(\d{3})(\d{3})(\d{4})$/);
@@ -52,6 +55,9 @@ export async function POST(req: NextRequest) {
       if (user.tempCodeExpires && new Date(user.tempCodeExpires) < new Date()) {
         return NextResponse.json({ error: 'Your access code has expired. Please re-subscribe.' }, { status: 401 });
       }
+      if (subscriptionLapsed(user.subscription)) {
+        return NextResponse.json({ error: LAPSED_MESSAGE }, { status: 403 });
+      }
       const token = signToken({
         userId: user.id,
         phone: user.phone,
@@ -71,6 +77,9 @@ export async function POST(req: NextRequest) {
       const valid = await bcrypt.compare(credential, user.passwordHash);
       if (!valid) {
         return NextResponse.json({ error: 'Incorrect phone number or password.' }, { status: 401 });
+      }
+      if (subscriptionLapsed(user.subscription)) {
+        return NextResponse.json({ error: LAPSED_MESSAGE }, { status: 403 });
       }
       const token = signToken({
         userId: user.id,

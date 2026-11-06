@@ -122,7 +122,7 @@ export default function LandingPage() {
         {/* How it works */}
         <section className="mt-16 mb-10 grid gap-4 sm:grid-cols-3">
           {[
-            { emoji: '📲', title: 'Subscribe by SMS', text: 'Text GAME to 32770 — your access code arrives by SMS.' },
+            { emoji: '📲', title: 'Subscribe by SMS', text: 'Text GVD to 20260 — your access code arrives by SMS.' },
             { emoji: '🎟️', title: 'Claim your ticket', text: 'Sign in at the Ticket Booth with your code, set a password.' },
             { emoji: '🧸', title: 'Win the prizes', text: 'Post scores, climb the Cup and fill your Prize Booth shelf.' },
           ].map((step) => (

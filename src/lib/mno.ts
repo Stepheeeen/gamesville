@@ -186,3 +186,22 @@ export async function sendSms(msisdn: string, serviceId: string, message: string
     return { ok: false, status: null, body: String(err) };
   }
 }
+
+// ── Access gating ─────────────────────────────────────────────────────────────
+
+/** Slack past the billed expiry so a late renewal callback doesn't lock anyone out. */
+const RENEWAL_GRACE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * True when the carrier subscription has ended: cancelled by billing sync,
+ * or past its expiry (plus grace). Accounts with no subscription record —
+ * QA/demo accounts and users from before billing sync — are not gated.
+ */
+export function subscriptionLapsed(
+  sub: { status?: string | null; expiresAt?: Date | string | null } | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (!sub) return false;
+  if (sub.status === 'cancelled') return true;
+  return !!sub.expiresAt && new Date(sub.expiresAt).getTime() + RENEWAL_GRACE_MS < now;
+}

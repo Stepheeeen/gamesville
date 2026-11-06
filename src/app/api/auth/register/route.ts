@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     if (process.env.MOCK_MNO === 'false') {
       return NextResponse.json(
-        { error: 'Text GAME to 32770 to subscribe — your access code arrives by SMS.' },
+        { error: 'Text GVD to 20260 to subscribe — your access code arrives by SMS.' },
         { status: 503 },
       );
     }
