@@ -25,11 +25,11 @@ function generate6DigitCode(): string {
 
 /** Sent on every renewal charge — MTN expects content for each billing cycle. */
 function renewalSms(): string {
-  return `Your Games Ville subscription is renewed. New games await at gamesville.games - log in with your number & password. Text STOP to 20260 to cancel.`;
+  return `Your Games Ville subscription is renewed. New games await at https://gamesville.games - log in with your number & password. Text STOP to 20260 to cancel.`;
 }
 
 function welcomeSms(code: string): string {
-  return `Welcome to Games Ville! Your access code is ${code}. Log in at gamesville.games with your number. Code expires in 48hrs.`;
+  return `Welcome to Games Ville! Your access code is ${code}. Log in at https://gamesville.games with your number. Code expires in 48hrs.`;
 }
 
 /** Run after the response when inside a request; inline otherwise (tests). */
