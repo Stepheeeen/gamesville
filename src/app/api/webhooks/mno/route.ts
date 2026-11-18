@@ -4,7 +4,7 @@
  *
  *   Addition     → issue a fresh 6-digit access code (create the user if new)
  *                  and SMS it to the subscriber via Kitten /sendsms
- *   Modification → renewal: extend the subscription (no new code)
+ *   Modification → renewal: extend the subscription and SMS renewal content
  *   Deletion     → revoke the access code and pass, mark the subscription cancelled
  *
  * The aggregator gets "Bill Sync OK" straight away; the SMS and the
@@ -21,6 +21,11 @@ const DEFAULT_SERVICE_ID = '2661'; // GAMES VILLE DAILY
 
 function generate6DigitCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+/** Sent on every renewal charge — MTN expects content for each billing cycle. */
+function renewalSms(): string {
+  return `Your Games Ville subscription is renewed. New games await at gamesville.games - log in with your number & password. Text STOP to 20260 to cancel.`;
 }
 
 function welcomeSms(code: string): string {
@@ -44,6 +49,7 @@ async function handle(req: NextRequest) {
 
   let outcome = 'logged';
   let code: string | null = null;
+  let renewed = false;
 
   try {
     if (cb.msisdn && cb.action !== 'unknown') {
@@ -63,6 +69,7 @@ async function handle(req: NextRequest) {
       } else if (cb.action === 'renew' && existing) {
         await updateUser(phone, { subscription: subscription('active') });
         outcome = 'renewed';
+        renewed = true;
       } else {
         // Addition — or a renewal for someone we never saw subscribe.
         code = generate6DigitCode();
@@ -105,13 +112,13 @@ async function handle(req: NextRequest) {
     ownSecret,
     outcome,
   };
-  const smsTo = code && cb.msisdn;
-  const smsCode = code;
+  const smsTo = cb.msisdn;
+  const smsText = code ? welcomeSms(code) : renewed ? renewalSms() : null;
 
   later(async () => {
     let sms: SmsResult | null = null;
-    if (smsTo && smsCode) {
-      sms = await sendSms(smsTo, serviceId, welcomeSms(smsCode));
+    if (smsTo && smsText) {
+      sms = await sendSms(smsTo, serviceId, smsText);
       if (!sms.ok) console.error(`[MNO Webhook] SMS to ${smsTo} failed:`, sms.status, sms.body);
     }
     try {
