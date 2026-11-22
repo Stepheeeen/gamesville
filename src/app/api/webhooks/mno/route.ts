@@ -16,7 +16,15 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { getUserByPhone, createUser, updateUser, cancelPass, logMnoEvent, type Subscription } from '@/lib/db';
 import { clientIp, hasOwnSecret, parseCallback, sendSms, type SmsResult } from '@/lib/mno';
 
+/** Fallback code lifetime when the callback carries no expiry date. */
 const CODE_TTL_MS = 48 * 60 * 60 * 1000;
+
+/** The access code lives as long as the plan the subscriber paid for (daily/weekly/monthly). */
+function codeExpiry(planExpiresAt: Date | null): Date {
+  return planExpiresAt && planExpiresAt.getTime() > Date.now()
+    ? planExpiresAt
+    : new Date(Date.now() + CODE_TTL_MS);
+}
 const DEFAULT_SERVICE_ID = '2661'; // GAMES VILLE DAILY
 
 function generate6DigitCode(): string {
@@ -29,7 +37,12 @@ function renewalSms(): string {
 }
 
 function welcomeSms(code: string): string {
-  return `Welcome to Games Ville! Your access code is ${code}. Log in at https://gamesville.games with your number. Code expires in 48hrs.`;
+  return `Welcome to Games Ville! Your access code is ${code}. Log in at https://gamesville.games with your number and set your password.`;
+}
+
+/** Renewal for someone who never finished sign-up: remind them of their code. */
+function renewalCodeSms(code: string): string {
+  return `Your Games Ville subscription is renewed. Your access code is ${code} - log in at https://gamesville.games with your number and set your password.`;
 }
 
 /** Run after the response when inside a request; inline otherwise (tests). */
@@ -50,6 +63,7 @@ async function handle(req: NextRequest) {
   let outcome = 'logged';
   let code: string | null = null;
   let renewed = false;
+  let renewalCode: string | null = null;
 
   try {
     if (cb.msisdn && cb.action !== 'unknown') {
@@ -67,7 +81,18 @@ async function handle(req: NextRequest) {
         await cancelPass(phone);
         outcome = 'unsubscribed';
       } else if (cb.action === 'renew' && existing) {
-        await updateUser(phone, { subscription: subscription('active') });
+        if (existing.passwordHash) {
+          await updateUser(phone, { subscription: subscription('active') });
+        } else {
+          // Still hasn't set a password: keep their code alive for the new period and resend it.
+          renewalCode = existing.tempCode || generate6DigitCode();
+          await updateUser(phone, {
+            tempCode: renewalCode,
+            tempCodeExpires: codeExpiry(cb.expiresAt).toISOString(),
+            isFirstLogin: true,
+            subscription: subscription('active'),
+          });
+        }
         outcome = 'renewed';
         renewed = true;
       } else {
@@ -76,12 +101,12 @@ async function handle(req: NextRequest) {
         if (existing) {
           await updateUser(phone, {
             tempCode: code,
-            tempCodeExpires: new Date(Date.now() + CODE_TTL_MS).toISOString(),
+            tempCodeExpires: codeExpiry(cb.expiresAt).toISOString(),
             subscription: subscription('active'),
           });
           outcome = 'resubscribed';
         } else {
-          await createUser(phone, code, CODE_TTL_MS);
+          await createUser(phone, code, codeExpiry(cb.expiresAt).getTime() - Date.now());
           await updateUser(phone, { subscription: subscription('active') });
           outcome = 'subscribed';
         }
@@ -113,7 +138,13 @@ async function handle(req: NextRequest) {
     outcome,
   };
   const smsTo = cb.msisdn;
-  const smsText = code ? welcomeSms(code) : renewed ? renewalSms() : null;
+  const smsText = code
+    ? welcomeSms(code)
+    : renewalCode
+      ? renewalCodeSms(renewalCode)
+      : renewed
+        ? renewalSms()
+        : null;
 
   later(async () => {
     let sms: SmsResult | null = null;

@@ -21,6 +21,10 @@ export async function GET(req: NextRequest) {
     if (subscriptionLapsed(user?.subscription)) {
       return NextResponse.json({ ok: false, reason: 'subscription' }, { status: 403 });
     }
+    // The access code only gets you to the set-password step; no play until a password exists.
+    if (user && !user.passwordHash) {
+      return NextResponse.json({ ok: false, reason: 'set-password' }, { status: 403 });
+    }
   } catch (err) {
     // DB trouble is not a verdict on the subscription — don't lock players out.
     console.error('[api/session] subscription check failed', err);
