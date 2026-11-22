@@ -205,3 +205,32 @@ export function subscriptionLapsed(
   if (sub.status === 'cancelled') return true;
   return !!sub.expiresAt && new Date(sub.expiresAt).getTime() + RENEWAL_GRACE_MS < now;
 }
+
+// ── Password reset by SMS ─────────────────────────────────────────────────────
+
+/** A reset code is short-lived: it only bridges "forgot password" to "set password". */
+export const RESET_CODE_TTL_MS = 15 * 60 * 1000;
+/** Wrong guesses allowed against any access/reset code before it is voided. */
+export const MAX_CODE_ATTEMPTS = 5;
+
+const RESET_COOLDOWN_MS = 60 * 1000;
+const RESET_WINDOW_MS = 60 * 60 * 1000;
+const RESET_MAX_PER_WINDOW = 3;
+
+/**
+ * Throttle for reset SMS: one a minute, three an hour per number.
+ * Returns the send timestamps to store (recent ones plus now) when allowed.
+ */
+export function resetThrottle(
+  sentAt: ReadonlyArray<Date | string> | null | undefined,
+  now = Date.now(),
+): { allowed: boolean; history: Date[] } {
+  const recent = (sentAt ?? []).map((t) => new Date(t)).filter((t) => now - t.getTime() < RESET_WINDOW_MS);
+  const last = Math.max(0, ...recent.map((t) => t.getTime()));
+  const allowed = recent.length < RESET_MAX_PER_WINDOW && now - last >= RESET_COOLDOWN_MS;
+  return { allowed, history: allowed ? [...recent, new Date(now)] : recent };
+}
+
+export function resetSms(brand: string, code: string): string {
+  return `Your ${brand} password reset code is ${code}. It expires in 15 minutes. If you did not request it, ignore this message.`;
+}

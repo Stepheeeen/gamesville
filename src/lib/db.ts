@@ -40,6 +40,10 @@ export interface UserDoc {
   securityAnswerHash: string | null;
   tempCode: string | null;
   tempCodeExpires: string | null;
+  /** Wrong guesses against the current code; the code is voided at MAX_CODE_ATTEMPTS. */
+  codeAttempts: number;
+  /** When password-reset SMS were last sent (for throttling). */
+  resetSentAt: string[];
   isFirstLogin: boolean;
   pass: { type: PassType; expiresAt: string } | null;
   /** Carrier subscription as last reported by the aggregator's billing sync. */
@@ -86,6 +90,8 @@ function hydrateUser(raw: Record<string, unknown>, id: string): UserDoc {
     securityAnswerHash: (raw.securityAnswerHash as string) ?? null,
     tempCode: (raw.tempCode as string) ?? null,
     tempCodeExpires: raw.tempCodeExpires ? new Date(raw.tempCodeExpires as string).toISOString() : null,
+    codeAttempts: Number(raw.codeAttempts ?? 0),
+    resetSentAt: ((raw.resetSentAt as Array<string | Date>) ?? []).map((t) => new Date(t).toISOString()),
     isFirstLogin: Boolean(raw.isFirstLogin ?? true),
     pass: (raw.pass as UserDoc['pass']) ?? null,
     subscription: (raw.subscription as Subscription) ?? null,

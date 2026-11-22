@@ -109,3 +109,7 @@ export function verifySecurity(phone: string, answer: string) {
 export function changePassword(changeToken: string, newPassword: string) {
   return post('/api/auth/change-password', { changeToken, newPassword }) as Promise<TokenResult>;
 }
+
+export function requestResetCode(phone: string) {
+  return post('/api/auth/reset-code', { phone }) as Promise<{ ok?: boolean; message?: string; error?: string }>;
+}

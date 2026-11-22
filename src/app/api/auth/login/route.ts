@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { getUserByPhone } from '@/lib/db';
+import { getUserByPhone, updateUser } from '@/lib/db';
 import { signToken } from '@/lib/jwt';
 import { rateLimit } from '@/lib/rate-limit';
 import { ensureDemoAccount } from '@/lib/demo';
-import { subscriptionLapsed } from '@/lib/mno';
+import { MAX_CODE_ATTEMPTS, subscriptionLapsed } from '@/lib/mno';
 
 const LAPSED_MESSAGE = 'Your Games Ville subscription has ended. Text GVD to 20260 to resubscribe.';
 
@@ -50,10 +50,28 @@ export async function POST(req: NextRequest) {
 
     if (credentialType === 'code') {
       if (!user.tempCode || user.tempCode !== credential) {
+        // Void the code after too many wrong guesses; a fresh one comes from "Forgot password".
+        if (user.tempCode) {
+          const attempts = user.codeAttempts + 1;
+          const voided = attempts >= MAX_CODE_ATTEMPTS;
+          await updateUser(
+            user.phone,
+            voided ? { tempCode: null, tempCodeExpires: null, codeAttempts: 0 } : { codeAttempts: attempts },
+          );
+          if (voided) {
+            return NextResponse.json(
+              { error: 'Too many wrong codes. Use "Forgot password?" to get a new code by SMS.' },
+              { status: 401 },
+            );
+          }
+        }
         return NextResponse.json({ error: 'Incorrect access code. Please check your SMS.' }, { status: 401 });
       }
       if (user.tempCodeExpires && new Date(user.tempCodeExpires) < new Date()) {
-        return NextResponse.json({ error: 'Your access code has expired. Please re-subscribe.' }, { status: 401 });
+        return NextResponse.json(
+          { error: 'Your code has expired. Use "Forgot password?" to get a new one by SMS.' },
+          { status: 401 },
+        );
       }
       if (subscriptionLapsed(user.subscription)) {
         return NextResponse.json({ error: LAPSED_MESSAGE }, { status: 403 });

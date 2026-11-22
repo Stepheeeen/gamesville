@@ -12,6 +12,7 @@ import {
   setPasswordAndSecurity,
   verifySecurity,
   changePassword,
+  requestResetCode,
 } from '@/lib/auth';
 import { useSession } from '@/lib/store';
 
@@ -62,6 +63,8 @@ function TicketBooth() {
   const [answer, setAnswer] = useState('');
   const [setupToken, setSetupToken] = useState<string | null>(null);
   const [changeToken, setChangeToken] = useState<string | null>(null);
+  /** True when the code screen is showing a password-reset code rather than the welcome code. */
+  const [resetSent, setResetSent] = useState(false);
 
   const finish = (token: string) => {
     const user = decodeSessionUser(token);
@@ -76,6 +79,18 @@ function TicketBooth() {
   const go = (s: Step) => {
     setError(null);
     setStep(s);
+  };
+
+  const handleSendResetCode = async () => {
+    if (phone.replace(/\D/g, '').length < 10) return setError('Enter your phone number first.');
+    setBusy(true);
+    setError(null);
+    const res = await requestResetCode(normaliseMsisdn(phone));
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    setResetSent(true);
+    setCode('');
+    go('code');
   };
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -200,11 +215,18 @@ function TicketBooth() {
           {step === 'code' && (
             <Form
               title="Enter your access code"
-              hint="The 6-digit code from your subscription SMS."
+              hint={
+                resetSent
+                  ? 'The 6-digit code from your password reset SMS. Then choose a new password.'
+                  : 'The 6-digit code from your subscription SMS.'
+              }
               busy={busy}
               submitLabel="Claim my ticket"
               onSubmit={handleCode}
-              onBack={() => go('landing')}
+              onBack={() => {
+                setResetSent(false);
+                go('landing');
+              }}
             >
               <PhoneInput value={phone} onChange={setPhone} />
               <input
@@ -215,6 +237,16 @@ function TicketBooth() {
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               />
+              {resetSent && (
+                <button
+                  type="button"
+                  className="text-left text-xs text-teal hover:underline"
+                  disabled={busy}
+                  onClick={handleSendResetCode}
+                >
+                  Didn’t get it? Send the code again
+                </button>
+              )}
             </Form>
           )}
 
@@ -279,7 +311,7 @@ function TicketBooth() {
           {step === 'forgot' && (
             <Form
               title="Recover your pass"
-              hint="Answer your security question to reset your password."
+              hint="Answer your security question, or get a reset code by SMS."
               busy={busy}
               submitLabel="Verify"
               onSubmit={handleForgot}
@@ -292,6 +324,14 @@ function TicketBooth() {
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
               />
+              <button
+                type="button"
+                className="text-left text-xs text-teal hover:underline"
+                disabled={busy}
+                onClick={handleSendResetCode}
+              >
+                Can’t remember your answer? Text me a reset code
+              </button>
             </Form>
           )}
 
